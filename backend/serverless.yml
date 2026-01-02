@@ -1,0 +1,173 @@
+service: candidate-post-interview-survey
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: ap-southeast-1
+  environment:
+    CANDIDATES_TABLE: ${self:service}-Candidates
+    RESPONSES_TABLE: ${self:service}-Responses
+    EMAIL_SENDER: celcomdigi_ta@celcomdigi.com
+    SURVEY_BASE_URL: https://YOUR_CLOUDFRONT_DOMAIN/s  # e.g., https://survey.celcomdigi.com/s
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:GetItem
+            - dynamodb:Query
+            - dynamodb:Scan
+          Resource:
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.CANDIDATES_TABLE}
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.RESPONSES_TABLE}
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.CANDIDATES_TABLE}/index/*
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.RESPONSES_TABLE}/index/*
+        - Effect: Allow
+          Action:
+            - ses:SendEmail
+            - ses:SendBulkEmail
+          Resource: "*"
+        - Effect: Allow
+          Action:
+            - s3:GetObject
+          Resource: "arn:aws:s3:::${self:service}-excel/*"
+
+functions:
+  candidates:
+    handler: src/handlers/candidates.manualAdd
+    events:
+      - httpApi:
+          path: /candidates
+          method: post
+          cors: true
+
+  invites:
+    handler: src/handlers/invites.sendInvites
+    events:
+      - httpApi:
+          path: /invites
+          method: post
+          cors: true
+
+  candidateByToken:
+    handler: src/handlers/candidates.getByToken
+    events:
+      - httpApi:
+          path: /candidateByToken
+          method: get
+          cors: true
+
+  surveySubmit:
+    handler: src/handlers/survey.submit
+    events:
+      - httpApi:
+          path: /survey
+          method: post
+          cors: true
+
+  reportSummary:
+    handler: src/handlers/reports.summary
+    events:
+      - httpApi:
+          path: /report/summary
+          method: get
+          cors: true
+
+  reportResponses:
+    handler: src/handlers/reports.responses
+    events:
+      - httpApi:
+          path: /report/responses
+          method: get
+          cors: true
+
+  reportDisagreeInsights:
+    handler: src/handlers/reports.disagreeInsights
+    events:
+      - httpApi:
+          path: /report/disagree-insights
+          method: get
+          cors: true
+
+  s3ExcelIngest:
+    handler: src/handlers/s3ExcelIngest.ingest
+    events:
+      - s3:
+          bucket: ${self:service}-excel
+          event: s3:ObjectCreated:*
+          existing: true
+
+  reminders:
+    handler: src/handlers/reminders.run
+    events:
+      - schedule: rate(1 day)
+
+resources:
+  Resources:
+    CandidatesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.CANDIDATES_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: candidateId
+            AttributeType: S
+          - AttributeName: year
+            AttributeType: S
+          - AttributeName: yearMonth
+            AttributeType: S
+        KeySchema:
+          - AttributeName: candidateId
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: byYear
+            KeySchema:
+              - AttributeName: year
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+          - IndexName: byYearMonth
+            KeySchema:
+              - AttributeName: yearMonth
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+
+    ResponsesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.RESPONSES_TABLE}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: candidateId
+            AttributeType: S
+          - AttributeName: year
+            AttributeType: S
+          - AttributeName: yearMonth
+            AttributeType: S
+        KeySchema:
+          - AttributeName: candidateId
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: byYear
+            KeySchema:
+              - AttributeName: year
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+          - IndexName: byYearMonth
+            KeySchema:
+              - AttributeName: yearMonth
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+
+    ExcelBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:service}-excel
+        VersioningConfiguration:
+          Status: Enabled
