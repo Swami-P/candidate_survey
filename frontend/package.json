@@ -18,5 +18,10 @@
   "devDependencies": {
     "vite": "^5.0.10",
     "@vitejs/plugin-react": "^4.3.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "postbuild": "echo '<!doctype html><html><head><meta charset=\"utf-8\"><title>Health Check</title></head><body><h1>OK: Dist Served</h1></body></html>' > dist/health.html"
   }
 }
