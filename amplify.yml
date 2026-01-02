@@ -6,13 +6,15 @@ applications:
       phases:
         preBuild:
           commands:
-            # Switch from npm ci to npm install (no lockfile required)
             - npm install
         build:
           commands:
             - npm run build
+        postBuild:
+          commands:
+            - echo "=== Listing dist contents ==="
+            - ls -la dist
       artifacts:
-        # Vite outputs static files to 'dist' by default
         baseDirectory: dist
         files:
           - '**/*'
